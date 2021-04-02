@@ -1,0 +1,83 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.initLocal = void 0;
+const path = require("path");
+const fs = require("fs");
+const parse_run_one_options_1 = require("./parse-run-one-options");
+/**
+ * Nx is being run inside a workspace.
+ *
+ * @param workspace Relevant local workspace properties
+ */
+process.env.NX_CLI_SET = 'true';
+function initLocal(workspace) {
+    require('@nrwl/workspace/' + 'src/utils/perf-logging');
+    const supportedNxCommands = require('@nrwl/workspace/' +
+        'src/command-line/supported-nx-commands').supportedNxCommands;
+    const runOpts = runOneOptions(workspace);
+    if (supportedNxCommands.includes(process.argv[2])) {
+        // required to make sure nrwl/workspace import works
+        if (workspace.type === 'nx') {
+            require('@nrwl/tao/src/compat/compat.js');
+        }
+        require('@nrwl/workspace' + '/src/command-line/nx-commands').commandsObject
+            .argv;
+    }
+    else {
+        if (runOpts === false || process.env.NX_SKIP_TASKS_RUNNER) {
+            if (workspace.type === 'angular' && process.argv[2] === 'update') {
+                console.log(`Nx provides a much improved version of "ng update". It runs the same migrations, but allows you to:`);
+                console.log(`- rerun the same migration multiple times`);
+                console.log(`- reorder migrations, skip migrations`);
+                console.log(`- fix migrations that "almost work"`);
+                console.log(`- commit a partially migrated state`);
+                console.log(`- change versions of packages to match organizational requirements`);
+                console.log(`And, in general, it is lot more reliable for non-trivial workspaces. Read more at: https://nx.dev/latest/angular/workspace/update`);
+                console.log(`Run "nx migrate latest" to update to the latest version of Nx.`);
+                console.log(`Running "ng update" can still be useful in some dev workflows, so we aren't planning to remove it.`);
+                console.log(`If you need to use it, run "FORCE_NG_UPDATE=true ng update".`);
+            }
+            else {
+                loadCli(workspace);
+            }
+        }
+        else {
+            require('@nrwl/workspace' + '/src/command-line/run-one').runOne(runOpts);
+        }
+    }
+}
+exports.initLocal = initLocal;
+function loadCli(workspace) {
+    let cliPath;
+    if (workspace.type === 'nx') {
+        cliPath = '@nrwl/tao/index.js';
+    }
+    else if (workspace.type === 'angular') {
+        cliPath = '@angular/cli/lib/init.js';
+    }
+    else {
+        console.error(`Cannot recognize the workspace type.`);
+        process.exit(1);
+    }
+    try {
+        const cli = require.resolve(cliPath, { paths: [workspace.dir] });
+        require(cli);
+    }
+    catch (e) {
+        console.error(`Could not find ${cliPath} module in this workspace.`, e);
+        process.exit(1);
+    }
+}
+function runOneOptions(workspace) {
+    try {
+        const nxJson = JSON.parse(fs.readFileSync(path.join(workspace.dir, 'nx.json')).toString());
+        const workspaceConfigJson = JSON.parse(fs
+            .readFileSync(path.join(workspace.dir, workspace.type === 'nx' ? 'workspace.json' : 'angular.json'))
+            .toString());
+        return parse_run_one_options_1.parseRunOneOptions(nxJson, workspaceConfigJson, process.argv.slice(2));
+    }
+    catch (e) {
+        return false;
+    }
+}
+//# sourceMappingURL=init-local.js.map
